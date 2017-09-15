@@ -1,4 +1,3 @@
-# There I did something
 
 # Libraries and options ---------------------------------------------------
 
@@ -79,7 +78,7 @@ ggplot( trades$trades, aes( date, price, size = amount ) ) +
   ggtitle( "BTC - EUR" )
 
 
-# Stream of data for trades ( bids and asks ) seem to be independent - no timestamp to match trades on... Not clear to me why.
+# Streams of data from order book ( bids and asks ) seem to be independent - no timestamp to match cases on... Not very clear to me why?
 # However, to get an idea for what tendencies seem to be occurring for asks, with reference to bids... we can plot them together:
 # Can also add in actual trades - which presumably are bids/asks that managed to converge and actually went through:
 
@@ -115,10 +114,8 @@ ggplot( bids_asks_trades, aes( x = price, group = Source, fill = Source ) ) +
 
 # Source: https://coherentlogic.com/wordpress/middleware-development/r-package-for-the-bitcoincharts-com-api/
 
-??GetMarketData
-??GetHistoricTradeData
-
-
+?GetMarketData
+?GetHistoricTradeData
 
 weightedPrices <- rbitcoinchartsapi::GetWeightedPrices()
 weightedPrices$GBP
