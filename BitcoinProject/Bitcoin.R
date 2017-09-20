@@ -1,12 +1,13 @@
 
 # Libraries and options ---------------------------------------------------
 
-# install.packages( c( "plyr", "data.table", "lubridate", "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "tseries" ) )
+# install.packages( c( "plyr", "data.table", "lubridate", "stringr, "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "tseries" ) )
 
 library(plyr)
 
 library(data.table)
 library(lubridate)
+library(stringr)
 
 library(Rbitcoin)
 library(rbitcoinchartsapi)
@@ -176,24 +177,59 @@ ggplot( last_hour_data,
 
 # Time series -------------------------------------------------------------
 
-# Is this time series stationary or non stationary?
 
+# Convert this data to a more typical time series format:
+
+historicTradeData_GBP[ , Minute := cut( unixtime, breaks = "min" ) ]
+historicTradeData_GBP[, WeightedMeansPerMinute := weighted.mean( price, amount ), by = Minute ]
+
+# Now to extract the new, equally-spaced sampling intervals.
+simplified_data <- historicTradeData_GBP[ , .SD, .SDcol = c( "Minute", "WeightedMeansPerMinute" ) ]
+simplified_data <- simplified_data[ ! duplicated( simplified_data ), ]
+  
+
+simplified_data[ , Date := sapply( str_split( as.character( Minute ), " " ), "[[", 1 ) ]
+simplified_data[ , MinuteWithinDay := sapply( str_split( as.character( Minute ), " " ), "[[", 2 ) ]
+simplified_data[ , Minute := NULL ]
+simplified_data_wide <- dcast( simplified_data, Date ~ MinuteWithinDay, value.var = "WeightedMeansPerMinute" )
+
+# With time, once we start accumulating more data, the width of this dataset will stay fixed, but it will get longer as we add in more days.
+
+
+# # Example time
+# data(AirPassengers)
+# class(AirPassengers)
+# start(AirPassengers)
+# frequency(AirPassengers)
+# summary(AirPassengers)
+# plot(AirPassengers)
+# abline(reg = lm( AirPassengers ~ time( AirPassengers ) ) )
+# cycle(AirPassengers)
+# plot(aggregate(AirPassengers,FUN=mean))
+# boxplot(AirPassengers~cycle(AirPassengers))
+
+
+# Is this time series stationary or non-stationary?
+# If non-stationary, cannot use time series modelling on the data.
+# Use Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf.test() indicates that it is stationary.
+
+adf.test( simplified_data$WeightedMeansPerMinute ) # p-value < 0.05 indicates the TS is stationary
+kpss.test( simplified_data$WeightedMeansPerMinute )
+
+
+
+# Since data is stationary (as suggested by the plots previously), we can now find out what lag is most suitable, using an ACF (auto correlation function).
 # From: http://r-statistics.co/Time-Series-Analysis-With-R.html :
 # Autocorrelation is the correlation of a Time Series with lags of itself. This is a significant metric because it is used commonly to determine if the time series is stationary or not. A stationary time series will have the autocorrelation fall to zero fairly quickly but for a non-stationary series it drops gradually.
 
-acf( historicTradeData_GBP$price )
-acf( historicTradeData_GBP$price, type = "covariance" )
-acf( historicTradeData_GBP$price, type = "correlation" )
-acf( historicTradeData_GBP$price, type = "partial" )
+acf( simplified_data$WeightedMeansPerMinute )
+acf( simplified_data$WeightedMeansPerMinute, type = "covariance" )
+acf( simplified_data$WeightedMeansPerMinute, type = "correlation" )
+acf( simplified_data$WeightedMeansPerMinute, type = "partial" )
 
-pacf( historicTradeData_GBP$price )
+pacf( simplified_data$WeightedMeansPerMinute )
 
-# How to test if a time series is stationary?
-# Use Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf.test() indicates that it is stationary.
 
-adf.test( historicTradeData_GBP$price ) # p-value < 0.05 indicates the TS is stationary
-kpss.test( historicTradeData_GBP$price )
-# Stationary. As shown in the plots above.
 
 
 
