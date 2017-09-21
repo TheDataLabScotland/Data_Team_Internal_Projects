@@ -1,7 +1,7 @@
 
 # Libraries and options ---------------------------------------------------
 
-# install.packages( c( "plyr", "data.table", "lubridate", "stringr, "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "tseries" ) )
+# install.packages( c( "plyr", "data.table", "lubridate", "stringr, "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "tseries", "xts" ) )
 
 library(plyr)
 
@@ -17,30 +17,10 @@ library(ggplot2)
 
 library(tseries)
 
+library(xts)
 # # Choose here:
 # options( scipen = 999 )
 # options( scipen = 0 )
-
-
-
-
-# Old stuff with downloaded data -------------------------------------------
-
-# Source: https://www.coinigy.com/bitcoin-data/
-
-# bitcoin_dat <- fread( "/home/caterina/Documents/TDL_Internal_Projects/Bitcoin/RAW_OK_BTCCNY_20160401_20160404.csv" )
-# bitcoin_dat <- bitcoin_dat[ 1 : 10000, ]
-# setnames( bitcoin_dat, c( "id", "exchange", "market", "tradeid", "price", "quantity", "total", "time_local", "type" ) )
-# 
-# summary( bitcoin_dat )
-# 
-# # bitcoin_dat[ , id := as.character( id ) ]
-# bitcoin_dat[ , exchange := as.character( exchange ) ]
-# bitcoin_dat[ , market := as.character( market ) ]
-# bitcoin_dat[ , type := as.factor( type ) ]
-# bitcoin_dat[ , time_local := lubridate::ymd_hms( time_local ) ]
-# 
-# head(bitcoin_dat)
 
 
 
@@ -180,24 +160,39 @@ ggplot( last_hour_data,
 
 # Convert this data to a more typical time series format:
 
-historicTradeData_GBP[ , Minute := cut( unixtime, breaks = "min" ) ]
-historicTradeData_GBP[, WeightedMeansPerMinute := weighted.mean( price, amount ), by = Minute ]
+ChosenTimeUnit <- "hour" # could also be "min", for instance
+
+historicTradeData_GBP[ , ChosenTimeUnit := cut( unixtime, breaks = ChosenTimeUnit ) ]
+historicTradeData_GBP[, WeightedAvePricesPerTimeUnit := weighted.mean( price, amount ), by = ChosenTimeUnit ]
 
 # Now to extract the new, equally-spaced sampling intervals.
-simplified_data <- historicTradeData_GBP[ , .SD, .SDcol = c( "Minute", "WeightedMeansPerMinute" ) ]
+simplified_data <- historicTradeData_GBP[ , .SD, .SDcol = c( "ChosenTimeUnit", "WeightedAvePricesPerTimeUnit" ) ]
 simplified_data <- simplified_data[ ! duplicated( simplified_data ), ]
   
 
-simplified_data[ , Date := sapply( str_split( as.character( Minute ), " " ), "[[", 1 ) ]
-simplified_data[ , MinuteWithinDay := sapply( str_split( as.character( Minute ), " " ), "[[", 2 ) ]
-simplified_data[ , Minute := NULL ]
-simplified_data_wide <- dcast( simplified_data, Date ~ MinuteWithinDay, value.var = "WeightedMeansPerMinute" )
+simplified_data[ , Date := sapply( str_split( as.character( ChosenTimeUnit ), " " ), "[[", 1 ) ]
+simplified_data[ , ChosenTimeUnitWithinDay := sapply( str_split( as.character( ChosenTimeUnit ), " " ), "[[", 2 ) ]
+simplified_data[ , ChosenTimeUnit := NULL ]
+
+simplified_data_wide <- dcast( simplified_data, Date ~ ChosenTimeUnitWithinDay, value.var = "WeightedAvePricesPerTimeUnit" )
+
+bitcoin_ts <- xts( as.vector( simplified_data_wide[ , -1 ] ), 
+                   order.by = as.Date( simplified_data_wide$Date ), 
+                   frequency = 24 )
 
 # With time, once we start accumulating more data, the width of this dataset will stay fixed, but it will get longer as we add in more days.
 
 
-# # Example time
-# data(AirPassengers)
+# Example:
+
+data(AirPassengers)
+AirPassengers
+
+str(AirPassengers)
+
+# Conceptually, this AirPassengers data looks the same to me as the bitcoin_ts data. And yet... the bitcoin_ts is seen as multivariate, whereas AirPassengers is seen as univariate. Been trying to convert the bitcoin data to univariate and have been unsuccessfuk... Hence, functions like adf.test() below do not work (only accepting univar stuff)...
+
+
 # class(AirPassengers)
 # start(AirPassengers)
 # frequency(AirPassengers)
@@ -213,8 +208,8 @@ simplified_data_wide <- dcast( simplified_data, Date ~ MinuteWithinDay, value.va
 # If non-stationary, cannot use time series modelling on the data.
 # Use Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf.test() indicates that it is stationary.
 
-adf.test( simplified_data$WeightedMeansPerMinute ) # p-value < 0.05 indicates the TS is stationary
-kpss.test( simplified_data$WeightedMeansPerMinute )
+adf.test( bitcoin_ts ) # p-value < 0.05 indicates the TS is stationary
+kpss.test( bitcoin_ts )
 
 
 
