@@ -1,7 +1,7 @@
 
 # Libraries and options ---------------------------------------------------
 
-# install.packages( c( "plyr", "data.table", "lubridate", "stringr, "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "tseries", "xts" ) )
+# install.packages( c( "plyr", "data.table", "lubridate", "stringr, "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "forecast", "tseries", "xts" ) )
 
 library(plyr)
 
@@ -15,9 +15,11 @@ library(rbitcoinchartsapi)
 library(igraph)
 library(ggplot2)
 
-library(tseries)
-
 library(xts)
+library(tseries)
+library(forecast)
+
+
 # # Choose here:
 # options( scipen = 999 )
 # options( scipen = 0 )
@@ -107,25 +109,41 @@ gbp_indices <- sapply( gbp, "[[", "currency" ) == "GBP"
 gbp[ gbp_indices ]
 
 
+
+
 # Getting historic data starting from a specific start date - BUT it does not accept a date further back into the past than 5 days... :
 # Using this, could figure out a day to scan data every 5 days, and add it to models. Or more often, if we want to.
+
+# Figure out the oldest day we can still grab *complete* data from - otherwise, the oldest data will be *precisely* from 5 days ago, i.e., data will not be included from midnight onwards, but rather, from some other random time in the morning (during working hours, anyhow). 
+
+oldest_complete_date <- as.Date( Sys.time( ) ) - 4
+
+
 historicTradeData_GBP <- rbitcoinchartsapi::GetHistoricTradeData( list( symbol = "localbtcGBP", 
-                                                                        start = as.numeric( as.POSIXct( "2017-09-10", 
+                                                                        start = as.numeric( as.POSIXct( oldest_complete_date, 
                                                                                                         format="%Y-%m-%d" ) ) ) )
+
 historicTradeData_EUR <- rbitcoinchartsapi::GetHistoricTradeData( list( symbol = "localbtcEUR", 
-                                                                        start = as.numeric( as.POSIXct( "2017-09-10", 
+                                                                        start = as.numeric( as.POSIXct( oldest_complete_date, 
                                                                                                         format="%Y-%m-%d" ) ) ) )
 historicTradeData_CNY <- rbitcoinchartsapi::GetHistoricTradeData( list( symbol = "btctradeCNY",
-                                                                        start = as.numeric( as.POSIXct( "2017-09-10", 
+                                                                        start = as.numeric( as.POSIXct( oldest_complete_date, 
                                                                                                         format="%Y-%m-%d" ) ) ) )
+
+# Remember to cut off any data from today - since, as the day is not over yet, this will also be incomplete
 
 setDT( historicTradeData_GBP )[ , symbol := "GBP" ]
 setDT( historicTradeData_EUR )[ , symbol := "EUR" ]
 setDT( historicTradeData_CNY )[ , symbol := "CNY" ]
 
 historicTradeData_GBP[  , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
+historicTradeData_GBP <- historicTradeData_GBP[ unixtime < as.Date( Sys.time() ), ]
+
 historicTradeData_EUR[  , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
+historicTradeData_EUR <- historicTradeData_EUR[ unixtime < as.Date( Sys.time() ), ]
+
 historicTradeData_CNY[  , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
+historicTradeData_CNY <- historicTradeData_CNY[ unixtime < as.Date( Sys.time() ), ]
 
 historicTradeData <- rbind( historicTradeData_GBP, historicTradeData_EUR, historicTradeData_CNY )
 
@@ -154,7 +172,6 @@ ggplot( last_hour_data,
 
 
 
-
 # Time series -------------------------------------------------------------
 
 
@@ -163,7 +180,7 @@ ggplot( last_hour_data,
 ChosenTimeUnit <- "hour" # could also be "min", for instance
 
 historicTradeData_GBP[ , ChosenTimeUnit := cut( unixtime, breaks = ChosenTimeUnit ) ]
-historicTradeData_GBP[, WeightedAvePricesPerTimeUnit := weighted.mean( price, amount ), by = ChosenTimeUnit ]
+historicTradeData_GBP[ , WeightedAvePricesPerTimeUnit := weighted.mean( price, amount ), by = ChosenTimeUnit ]
 
 # Now to extract the new, equally-spaced sampling intervals.
 simplified_data <- historicTradeData_GBP[ , .SD, .SDcol = c( "ChosenTimeUnit", "WeightedAvePricesPerTimeUnit" ) ]
@@ -174,55 +191,70 @@ simplified_data[ , Date := sapply( str_split( as.character( ChosenTimeUnit ), " 
 simplified_data[ , ChosenTimeUnitWithinDay := sapply( str_split( as.character( ChosenTimeUnit ), " " ), "[[", 2 ) ]
 simplified_data[ , ChosenTimeUnit := NULL ]
 
-simplified_data_wide <- dcast( simplified_data, Date ~ ChosenTimeUnitWithinDay, value.var = "WeightedAvePricesPerTimeUnit" )
+# This adds in NA values whenever a certain hour has no data. Otherwise, this does not get flagged into the long-format data.
+simplified_data_wide <- dcast( simplified_data, 
+                               Date ~ ChosenTimeUnitWithinDay, 
+                               value.var = "WeightedAvePricesPerTimeUnit" )
 
-bitcoin_ts <- xts( as.vector( simplified_data_wide[ , -1 ] ), 
-                   order.by = as.Date( simplified_data_wide$Date ), 
+# Back to wide - but this time with the missing slots flagged up. This is useful in order to have a constant frequency / number of columns or values per day (i.e., 24 hours per day).
+simplified_data_long <- melt( simplified_data_wide, id.vars = 'Date', value.name = "WeightedAvePricesPerTimeUnit" )
+simplified_data_long <- simplified_data_long[ order( Date, variable ), ]
+
+
+bitcoin_ts <- ts( simplified_data_long$WeightedAvePricesPerTimeUnit, 
+                  frequency = 24, 
+                  deltat = 1/24 )
+
+cycle( bitcoin_ts )
+
+plot( bitcoin_ts )
+abline(reg = lm( bitcoin_ts ~ time( bitcoin_ts ) ) )
+plot( aggregate( bitcoin_ts, FUN = mean ) )
+
+boxplot( bitcoin_ts ~ cycle( bitcoin_ts ) ) # Shows how things vary across the time of day (by considering data from all days within each boxplot)
+summary( bitcoin_ts )
+
+
+
+bitcoin_xts <- xts( simplified_data_long$WeightedAvePricesPerTimeUnit, 
+                   order.by = as.Date( simplified_data_long$Date ),
                    frequency = 24 )
+
 
 # With time, once we start accumulating more data, the width of this dataset will stay fixed, but it will get longer as we add in more days.
 
 
-# Example:
-
-data(AirPassengers)
-AirPassengers
-
-str(AirPassengers)
-
-# Conceptually, this AirPassengers data looks the same to me as the bitcoin_ts data. And yet... the bitcoin_ts is seen as multivariate, whereas AirPassengers is seen as univariate. Been trying to convert the bitcoin data to univariate and have been unsuccessfuk... Hence, functions like adf.test() below do not work (only accepting univar stuff)...
-
-
-# class(AirPassengers)
-# start(AirPassengers)
-# frequency(AirPassengers)
-# summary(AirPassengers)
-# plot(AirPassengers)
-# abline(reg = lm( AirPassengers ~ time( AirPassengers ) ) )
-# cycle(AirPassengers)
-# plot(aggregate(AirPassengers,FUN=mean))
-# boxplot(AirPassengers~cycle(AirPassengers))
+# # Example:
+# data(AirPassengers)
+# AirPassengers
+# str(AirPassengers)
+# # Conceptually, this AirPassengers data looks the same to me as the bitcoin_ts data. And yet... the bitcoin_ts is seen as multivariate, whereas AirPassengers is seen as univariate. Been trying to convert the bitcoin data to univariate and have been unsuccessful... Hence, functions like adf.test() below do not work (only accepting univar stuff)...
 
 
 # Is this time series stationary or non-stationary?
 # If non-stationary, cannot use time series modelling on the data.
 # Use Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf.test() indicates that it is stationary.
 
-adf.test( bitcoin_ts ) # p-value < 0.05 indicates the TS is stationary
+# These don't respond well to missing values. So just for the sake of computing something, let's replace NAs with 0:
+
+
+
+adf.test( na.omit( bitcoin_ts ) ) # p-value < 0.05 indicates the TS is stationary
 kpss.test( bitcoin_ts )
 
-
+# OR:
+forecast::ndiffs( bitcoin_ts, alpha = 0.05, test = "kpss", max.d = 2 )
 
 # Since data is stationary (as suggested by the plots previously), we can now find out what lag is most suitable, using an ACF (auto correlation function).
 # From: http://r-statistics.co/Time-Series-Analysis-With-R.html :
 # Autocorrelation is the correlation of a Time Series with lags of itself. This is a significant metric because it is used commonly to determine if the time series is stationary or not. A stationary time series will have the autocorrelation fall to zero fairly quickly but for a non-stationary series it drops gradually.
 
-acf( simplified_data$WeightedMeansPerMinute )
-acf( simplified_data$WeightedMeansPerMinute, type = "covariance" )
-acf( simplified_data$WeightedMeansPerMinute, type = "correlation" )
-acf( simplified_data$WeightedMeansPerMinute, type = "partial" )
+acf( na.omit( bitcoin_ts ) )
+acf( na.omit( bitcoin_ts ) , type = "covariance" )
+acf( na.omit( bitcoin_ts ) , type = "correlation" )
+acf( na.omit( bitcoin_ts ) , type = "partial" )
 
-pacf( simplified_data$WeightedMeansPerMinute )
+pacf( na.omit( bitcoin_ts ) )
 
 
 
