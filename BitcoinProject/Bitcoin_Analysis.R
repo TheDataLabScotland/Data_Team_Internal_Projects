@@ -183,14 +183,34 @@ RData_bitcoin_files <- list.files( "/home/caterina/Documents/TDL_Internal_Projec
 RData_bitcoin_files_short <- list.files( "/home/caterina/Documents/TDL_Internal_Projects/Data_Team_Internal_Projects/BitcoinProject", 
                                          pattern = "*.RData$", full.names = FALSE )
 
-my_file_list <- lapply( RData_bitcoin_files, function( x ){ load( x ); get( ls( ) ) } )
-names( my_file_list ) <- RData_bitcoin_files_short
 
-historicTradeData_GBP <- rbindlist( my_file_list )
+EUR_transactions <- list()
+GBP_transactions <- list()
+for ( RData_file in RData_bitcoin_files ) {
+  print( RData_file )
+  EUR_and_GBP_to_BTN <- get( load( RData_file ) )
+  EUR_transactions[[ which( RData_bitcoin_files == RData_file ) ]] <- historicTradeData_EUR_yesterday
+  GBP_transactions[[ which( RData_bitcoin_files == RData_file ) ]] <- historicTradeData_GBP_yesterday
+}
+
+# Clean up workspace by removing the objects containing just the most recent day of data collection:
+# Also create full-size objects, containing in each case, the full data collected across the days of measurement.
+
+rm( list = c( "historicTradeData_GBP_yesterday", "historicTradeData_EUR_yesterday" ) )
+historicTradeData_EUR <- rbindlist( EUR_transactions )
+historicTradeData_GBP <- rbindlist( GBP_transactions )
+
 
 
 
 # Time series -------------------------------------------------------------
+
+
+# # The lazy option:
+# bitcoin_xts <- xts( simplified_data_long$WeightedAvePricesPerTimeUnit, 
+#                     order.by = as.Date( simplified_data_long$Date ),
+#                     frequency = 24 )
+# to.weekly()
 
 
 # Convert this data to a more typical time series format:
@@ -234,9 +254,6 @@ summary( bitcoin_ts )
 
 
 
-bitcoin_xts <- xts( simplified_data_long$WeightedAvePricesPerTimeUnit, 
-                   order.by = as.Date( simplified_data_long$Date ),
-                   frequency = 24 )
 
 
 # With time, once we start accumulating more data, the width of this dataset will stay fixed, but it will get longer as we add in more days.
