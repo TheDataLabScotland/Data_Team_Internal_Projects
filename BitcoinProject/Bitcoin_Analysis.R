@@ -27,6 +27,8 @@ library(forecast)
 
 
 
+
+
 # Rbitcoin package -------------------------------------------------------
 
 
@@ -169,6 +171,22 @@ ggplot( last_hour_data,
   guides( size = guide_legend( override.aes = list( linetype = 0 ) ) ) +
   ggtitle( "And now this happened... " )
 
+
+# Grabbing daily Bitcoin data ---------------------------------------------
+
+# Alternative to the previous code - once enough data is gathered (maybe 1 month's worth?), can switch entirely to this data:
+
+
+RData_bitcoin_files <- list.files( "/home/caterina/Documents/TDL_Internal_Projects/Data_Team_Internal_Projects/BitcoinProject", 
+                                   pattern = "*.RData$", full.names = TRUE )
+
+RData_bitcoin_files_short <- list.files( "/home/caterina/Documents/TDL_Internal_Projects/Data_Team_Internal_Projects/BitcoinProject", 
+                                         pattern = "*.RData$", full.names = FALSE )
+
+my_file_list <- lapply( RData_bitcoin_files, function( x ){ load( x ); get( ls( ) ) } )
+names( my_file_list ) <- RData_bitcoin_files_short
+
+historicTradeData_GBP <- rbindlist( my_file_list )
 
 
 
