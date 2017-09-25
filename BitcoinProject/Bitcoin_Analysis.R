@@ -128,6 +128,7 @@ historicTradeData_GBP <- rbitcoinchartsapi::GetHistoricTradeData( list( symbol =
 historicTradeData_EUR <- rbitcoinchartsapi::GetHistoricTradeData( list( symbol = "localbtcEUR", 
                                                                         start = as.numeric( as.POSIXct( oldest_complete_date, 
                                                                                                         format="%Y-%m-%d" ) ) ) )
+
 historicTradeData_CNY <- rbitcoinchartsapi::GetHistoricTradeData( list( symbol = "btctradeCNY",
                                                                         start = as.numeric( as.POSIXct( oldest_complete_date, 
                                                                                                         format="%Y-%m-%d" ) ) ) )
@@ -172,6 +173,9 @@ ggplot( last_hour_data,
   ggtitle( "And now this happened... " )
 
 
+
+
+
 # Grabbing daily Bitcoin data ---------------------------------------------
 
 # Alternative to the previous code - once enough data is gathered (maybe 1 month's worth?), can switch entirely to this data:
@@ -194,27 +198,36 @@ for ( RData_file in RData_bitcoin_files ) {
 }
 
 # Clean up workspace by removing the objects containing just the most recent day of data collection:
-# Also create full-size objects, containing in each case, the full data collected across the days of measurement.
-
 rm( list = c( "historicTradeData_GBP_yesterday", "historicTradeData_EUR_yesterday" ) )
+# Also create full-size objects, containing in each case, the full data collected across the days of measurement.
 historicTradeData_EUR <- rbindlist( EUR_transactions )
 historicTradeData_GBP <- rbindlist( GBP_transactions )
 
+historicTradeData_GBP[ , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
+historicTradeData_EUR[ , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
 
 
 
 # Time series -------------------------------------------------------------
 
 
-# # The lazy option:
-# bitcoin_xts <- xts( simplified_data_long$WeightedAvePricesPerTimeUnit, 
-#                     order.by = as.Date( simplified_data_long$Date ),
-#                     frequency = 24 )
-# to.weekly()
+
+# xts version -------------------------------------------------------------
 
 
+bitcoin_xts <- xts( historicTradeData_GBP$price,
+                    order.by = as.POSIXct( historicTradeData_GBP$unixtime ) )
+coredata( bitcoin_xts )
+bitcoin_hourly_xts <- to.period( bitcoin_xts, period = 'hours' )
+
+plot( bitcoin_xts )
+
+
+
+# ts version --------------------------------------------------------
+
+# The more involved option, with the possibility of one value per cell, which is a weighted mean:
 # Convert this data to a more typical time series format:
-
 ChosenTimeUnit <- "hour" # could also be "min", for instance
 
 historicTradeData_GBP[ , ChosenTimeUnit := cut( unixtime, breaks = ChosenTimeUnit ) ]
