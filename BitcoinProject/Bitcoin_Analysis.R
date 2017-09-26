@@ -1,7 +1,7 @@
 
 # Libraries and options ---------------------------------------------------
 
-# install.packages( c( "plyr", "data.table", "lubridate", "stringr, "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "forecast", "tseries", "xts" ) )
+# install.packages( c( "plyr", "data.table", "lubridate", "stringr, "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "forecast", "tseries", "xts", "TTR" ) )
 
 library(plyr)
 
@@ -18,7 +18,7 @@ library(ggplot2)
 library(xts)
 library(tseries)
 library(forecast)
-
+library(TTR)
 
 # # Choose here:
 # options( scipen = 999 )
@@ -199,6 +199,7 @@ for ( RData_file in RData_bitcoin_files ) {
 
 # Clean up workspace by removing the objects containing just the most recent day of data collection:
 rm( list = c( "historicTradeData_GBP_yesterday", "historicTradeData_EUR_yesterday" ) )
+
 # Also create full-size objects, containing in each case, the full data collected across the days of measurement.
 historicTradeData_EUR <- rbindlist( EUR_transactions )
 historicTradeData_GBP <- rbindlist( GBP_transactions )
@@ -210,10 +211,9 @@ historicTradeData_EUR[ , unixtime := as.POSIXct( unixtime, origin = "1970-01-01"
 
 # Time series -------------------------------------------------------------
 
-
-
 # xts version -------------------------------------------------------------
 
+# (optional)
 
 bitcoin_xts <- xts( historicTradeData_GBP$price,
                     order.by = as.POSIXct( historicTradeData_GBP$unixtime ) )
@@ -231,10 +231,14 @@ plot( bitcoin_xts )
 ChosenTimeUnit <- "hour" # could also be "min", for instance
 
 historicTradeData_GBP[ , ChosenTimeUnit := cut( unixtime, breaks = ChosenTimeUnit ) ]
+# Looks like there are no trades recorded between midnight/00.00 and 1.00am, hence there are 23 measures per day, instead of 24.
+table( lubridate::hour( historicTradeData_GBP$unixtime ) )
+
 historicTradeData_GBP[ , WeightedAvePricesPerTimeUnit := weighted.mean( price, amount ), by = ChosenTimeUnit ]
 
 # Now to extract the new, equally-spaced sampling intervals.
-simplified_data <- historicTradeData_GBP[ , .SD, .SDcol = c( "ChosenTimeUnit", "WeightedAvePricesPerTimeUnit" ) ]
+simplified_data <- historicTradeData_GBP[ , .SD, .SDcol = c( "ChosenTimeUnit", 
+                                                             "WeightedAvePricesPerTimeUnit" ) ]
 simplified_data <- simplified_data[ ! duplicated( simplified_data ), ]
   
 
@@ -242,41 +246,35 @@ simplified_data[ , Date := sapply( str_split( as.character( ChosenTimeUnit ), " 
 simplified_data[ , ChosenTimeUnitWithinDay := sapply( str_split( as.character( ChosenTimeUnit ), " " ), "[[", 2 ) ]
 simplified_data[ , ChosenTimeUnit := NULL ]
 
+
 # This adds in NA values whenever a certain hour has no data. Otherwise, this does not get flagged into the long-format data.
 simplified_data_wide <- dcast( simplified_data, 
                                Date ~ ChosenTimeUnitWithinDay, 
                                value.var = "WeightedAvePricesPerTimeUnit" )
 
+
 # Back to wide - but this time with the missing slots flagged up. This is useful in order to have a constant frequency / number of columns or values per day (i.e., 24 hours per day).
-simplified_data_long <- melt( simplified_data_wide, id.vars = 'Date', value.name = "WeightedAvePricesPerTimeUnit" )
-simplified_data_long <- simplified_data_long[ order( Date, variable ), ]
-
-
+simplified_data_long <- melt( simplified_data_wide, 
+                              id.vars = 'Date', 
+                              value.name = "WeightedAvePricesPerTimeUnit", 
+                              variable.name = "Hour" )
+simplified_data_long <- simplified_data_long[ order( Date, Hour ), ]
+ 
 bitcoin_ts <- ts( simplified_data_long$WeightedAvePricesPerTimeUnit, 
-                  frequency = 24, 
-                  deltat = 1/24 )
+                  frequency = 23 )
 
 cycle( bitcoin_ts )
-
-plot( bitcoin_ts )
-abline(reg = lm( bitcoin_ts ~ time( bitcoin_ts ) ) )
-plot( aggregate( bitcoin_ts, FUN = mean ) )
-
-boxplot( bitcoin_ts ~ cycle( bitcoin_ts ) ) # Shows how things vary across the time of day (by considering data from all days within each boxplot)
 summary( bitcoin_ts )
 
-
+plot( bitcoin_ts )
+abline( reg = lm( bitcoin_ts ~ time( bitcoin_ts ) ) )
+plot( aggregate( bitcoin_ts, FUN = mean ) ) # Average price for each day of measurement.
+boxplot( bitcoin_ts ~ cycle( bitcoin_ts ) ) # Shows how things vary across the time of day (by considering data from all days within each boxplot)
 
 
 
 # With time, once we start accumulating more data, the width of this dataset will stay fixed, but it will get longer as we add in more days.
 
-
-# # Example:
-# data(AirPassengers)
-# AirPassengers
-# str(AirPassengers)
-# # Conceptually, this AirPassengers data looks the same to me as the bitcoin_ts data. And yet... the bitcoin_ts is seen as multivariate, whereas AirPassengers is seen as univariate. Been trying to convert the bitcoin data to univariate and have been unsuccessful... Hence, functions like adf.test() below do not work (only accepting univar stuff)...
 
 
 # Is this time series stationary or non-stationary?
@@ -301,11 +299,30 @@ acf( na.omit( bitcoin_ts ) )
 acf( na.omit( bitcoin_ts ) , type = "covariance" )
 acf( na.omit( bitcoin_ts ) , type = "correlation" )
 acf( na.omit( bitcoin_ts ) , type = "partial" )
-
 pacf( na.omit( bitcoin_ts ) )
 
 
+# Smoothing the time series with a moving average, to view the 'trend component' in the data:
+# From: https://a-little-book-of-r-for-time-series.readthedocs.io/en/latest/src/timeseries.html
+plot( bitcoin_ts )
+bitcoin_ts_sma <- ts( SMA( bitcoin_ts, n = 15 ), frequency = 23 )
+plot( bitcoin_ts_sma )
 
+
+# "A seasonal time series consists of a trend component, a seasonal component and an irregular component. Decomposing the time series means separating the time series into these three components: that is, estimating these three components."
+decomposed_bitcoin_ts <- stats::decompose( bitcoin_ts )
+plot( decomposed_bitcoin_ts )
+
+# Using these decomposed streams, *I think* we can take a look at the overall trend in prices across the days tested - regardless of the hourly variations:
+# I think in our case, 'seasonal' variation corresponds to 'daily' variations in prices.
+bitcoin_ts_seasonally_adjusted <- bitcoin_ts - decomposed_bitcoin_ts$seasonal
+plot( bitcoin_ts_seasonally_adjusted )
+# vs
+plot( bitcoin_ts )
+
+# Similar idea:
+bitcoin_ts_seasonally_and_randomness_adjusted <- bitcoin_ts - decomposed_bitcoin_ts$seasonal - decomposed_bitcoin_ts$random
+plot( bitcoin_ts_seasonally_and_randomness_adjusted ) # Very similar to the SMA ts.
 
 
 
