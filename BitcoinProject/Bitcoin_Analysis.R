@@ -281,9 +281,6 @@ boxplot( bitcoin_ts ~ cycle( bitcoin_ts ) ) # Shows how things vary across the t
 # If non-stationary, cannot use time series modelling on the data.
 # Use Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf.test() indicates that it is stationary.
 
-# These don't respond well to missing values. So just for the sake of computing something, let's replace NAs with 0:
-
-
 
 adf.test( na.omit( bitcoin_ts ) ) # p-value < 0.05 indicates the TS is stationary
 kpss.test( bitcoin_ts )
@@ -305,7 +302,7 @@ pacf( na.omit( bitcoin_ts ) )
 # Smoothing the time series with a moving average, to view the 'trend component' in the data:
 # From: https://a-little-book-of-r-for-time-series.readthedocs.io/en/latest/src/timeseries.html
 plot( bitcoin_ts )
-bitcoin_ts_sma <- ts( SMA( bitcoin_ts, n = 15 ), frequency = 23 )
+bitcoin_ts_sma <- ts( SMA( bitcoin_ts, n = 17 ), frequency = 23 )
 plot( bitcoin_ts_sma )
 
 
