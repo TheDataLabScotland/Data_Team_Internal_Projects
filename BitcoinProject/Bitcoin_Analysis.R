@@ -1,13 +1,14 @@
 
 # Libraries and options ---------------------------------------------------
 
-# install.packages( c( "plyr", "data.table", "lubridate", "stringr, "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "forecast", "tseries", "xts", "TTR" ) )
+# install.packages( c( "plyr", "data.table", "lubridate", "stringr, "tidyr", "Rbitcoin", "rbitcoinchartsapi", "igraph", "ggplot2", "forecast", "tseries", "xts", "TTR" ) )
 
 library(plyr)
 
 library(data.table)
 library(lubridate)
 library(stringr)
+library(tidyr)
 
 library(Rbitcoin)
 library(rbitcoinchartsapi)
@@ -251,6 +252,17 @@ simplified_data[ , ChosenTimeUnit := NULL ]
 simplified_data_wide <- dcast( simplified_data, 
                                Date ~ ChosenTimeUnitWithinDay, 
                                value.var = "WeightedAvePricesPerTimeUnit" )
+
+# Impute values from previous cell, whenever there is missing data. Since fill() fills empty cells vertically, going to temporarily transpose this data:
+simplified_data_wide_t <- data.table( t( simplified_data_wide[ , - 1] ) )
+simplified_data_wide_t <- data.table( apply( simplified_data_wide_t, 2, as.numeric ) )
+simplified_data_wide_t <- fill( simplified_data_wide_t, c( V19, V25 ), .direction = "down" )
+
+readd_dates <- simplified_data_wide$Date
+column_names <- names( simplified_data_wide )
+simplified_data_wide <- t( simplified_data_wide_t )
+simplified_data_wide <- data.table( readd_dates, simplified_data_wide )
+setnames( simplified_data_wide, column_names )
 
 
 # Back to wide - but this time with the missing slots flagged up. This is useful in order to have a constant frequency / number of columns or values per day (i.e., 24 hours per day).
