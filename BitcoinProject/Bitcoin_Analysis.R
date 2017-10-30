@@ -300,14 +300,25 @@ kpss.test( bitcoin_ts )
 # OR:
 forecast::ndiffs( bitcoin_ts, alpha = 0.05, test = "kpss", max.d = 2 )
 
-# Since data is stationary (as suggested by the plots previously), we can now find out what lag is most suitable, using an ACF (auto correlation function).
+# Since data is stationary (as suggested by the plots previously), we can now find out what lag is most suitable, using an ACF (auto correlation function). Otherwise (P)ACF would be meaningless.
 # From: http://r-statistics.co/Time-Series-Analysis-With-R.html :
 # Autocorrelation is the correlation of a Time Series with lags of itself. This is a significant metric because it is used commonly to determine if the time series is stationary or not. A stationary time series will have the autocorrelation fall to zero fairly quickly but for a non-stationary series it drops gradually.
 
-acf( na.omit( bitcoin_ts ) )
-acf( na.omit( bitcoin_ts ) , type = "covariance" )
+# From: https://www.youtube.com/watch?v=tJ-O3hk1vRw (Jeffrey Yau | Applied Time Series Econometrics in Python and R)
+# Pattern of ACF and PACF associated with AR, MA and ARMA processes:
+
+# This applies to, and needs to be specified for, any SEASONAL and NON-SEASONAL components alike:
+# Process   
+#      |         ACF                PACF
+# AR   | tails off          | cutoff after lag p
+# MA   | cutoff after lag q | tails off
+# ARMA | tails off          | tails off
+
+
+
+# acf( na.omit( bitcoin_ts ) , type = "covariance" )
 acf( na.omit( bitcoin_ts ) , type = "correlation" )
-acf( na.omit( bitcoin_ts ) , type = "partial" )
+acf( na.omit( bitcoin_ts ) , type = "partial" ) # This one is the same as:
 pacf( na.omit( bitcoin_ts ) )
 
 
