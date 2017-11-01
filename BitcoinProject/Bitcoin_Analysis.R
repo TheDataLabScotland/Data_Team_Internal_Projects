@@ -208,6 +208,11 @@ historicTradeData_GBP <- rbindlist( GBP_transactions )
 historicTradeData_GBP[ , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
 historicTradeData_EUR[ , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
 
+# HACK!!!! BEWARE
+historicTradeData_GBP <- historicTradeData_GBP[ unixtime < "2017-10-30" , ]
+historicTradeData_EUR <- historicTradeData_EUR[ unixtime < "2017-10-30" , ]
+
+
 
 
 # Time series -------------------------------------------------------------
@@ -317,15 +322,12 @@ forecast::ndiffs( bitcoin_ts, alpha = 0.05, test = "kpss", max.d = 2 )
 
 
 # acf( na.omit( bitcoin_ts ) , type = "covariance" )
-acf( na.omit( bitcoin_ts ) , type = "correlation" )
-acf( na.omit( bitcoin_ts ) , type = "partial" ) # This one is the same as:
-pacf( na.omit( bitcoin_ts ) )
-
+ 
 
 # Smoothing the time series with a moving average, to view the 'trend component' in the data:
 # From: https://a-little-book-of-r-for-time-series.readthedocs.io/en/latest/src/timeseries.html
 plot( bitcoin_ts )
-bitcoin_ts_sma <- ts( SMA( bitcoin_ts, n = 17 ), frequency = 23 )
+bitcoin_ts_sma <- ts( SMA( bitcoin_ts, n = 24 ), frequency = 23 )
 plot( bitcoin_ts_sma )
 
 
