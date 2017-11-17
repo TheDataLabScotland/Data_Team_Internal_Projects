@@ -37,7 +37,7 @@ setDT( historicTradeData_EUR_yesterday )[  , unixtime := as.POSIXct( unixtime, o
 historicTradeData_EUR_yesterday <- historicTradeData_EUR_yesterday[ unixtime < as.Date( Sys.time() ), ]
 
 
-save.image( paste( "/home/caterina/Documents/TDL_Internal_Projects/Data_Team_Internal_Projects/BitcoinProject/DailyBitcoinPrices_", 
+save.image( paste( "/home/caterina/Documents/Data_Team_Internal_Projects/BitcoinProject/DailyBitcoinPrices_", 
                    yesterday,
                    ".RData", 
                    sep = "" ) )
