@@ -33,6 +33,9 @@ historicTradeData_GBP_yesterday <- historicTradeData_GBP_yesterday[ unixtime < a
 historicTradeData_EUR_yesterday <- rbitcoinchartsapi::GetHistoricTradeData( list( symbol = "localbtcEUR", 
                                                                                   start = as.numeric( as.POSIXct( yesterday, 
                                                                                                                   format="%Y-%m-%d" ) ) ) )
+
+# NB. The time conversion code below converts to local time instead of GMT/UTC and implicitly applies daylight saving rules:
+
 setDT( historicTradeData_EUR_yesterday )[  , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
 historicTradeData_EUR_yesterday <- historicTradeData_EUR_yesterday[ unixtime < as.Date( Sys.time() ), ]
 

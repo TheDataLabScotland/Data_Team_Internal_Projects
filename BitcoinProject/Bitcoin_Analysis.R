@@ -181,11 +181,10 @@ ggplot( last_hour_data,
 
 # Alternative to the previous code - once enough data is gathered (maybe 1 month's worth?), can switch entirely to this data:
 
-
-RData_bitcoin_files <- list.files( "/home/caterina/Documents/TDL_Internal_Projects/Data_Team_Internal_Projects/BitcoinProject", 
+RData_bitcoin_files <- list.files( "/home/caterina/Documents/Data_Team_Internal_Projects/BitcoinProject", 
                                    pattern = "*.RData$", full.names = TRUE )
 
-RData_bitcoin_files_short <- list.files( "/home/caterina/Documents/TDL_Internal_Projects/Data_Team_Internal_Projects/BitcoinProject", 
+RData_bitcoin_files_short <- list.files( "/home/caterina/Documents/Data_Team_Internal_Projects/BitcoinProject", 
                                          pattern = "*.RData$", full.names = FALSE )
 
 
@@ -205,17 +204,23 @@ rm( list = c( "historicTradeData_GBP_yesterday", "historicTradeData_EUR_yesterda
 historicTradeData_EUR <- rbindlist( EUR_transactions )
 historicTradeData_GBP <- rbindlist( GBP_transactions )
 
-historicTradeData_GBP[ , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
-historicTradeData_EUR[ , unixtime := as.POSIXct( unixtime, origin = "1970-01-01" ) ]
+historicTradeData_GBP[ , unixtime2 := as.POSIXct( unixtime, origin = "1970-01-01", tz = "UTC" ) ]
+historicTradeData_EUR[ , unixtime2 := as.POSIXct( unixtime, origin = "1970-01-01", tz = "UTC" ) ]
 
-# HACK!!!! BEWARE
-historicTradeData_GBP <- historicTradeData_GBP[ unixtime < "2017-10-30" , ]
-historicTradeData_EUR <- historicTradeData_EUR[ unixtime < "2017-10-30" , ]
+# # It looks like daylight saving was applied in the script that was pulling down the data (pre 30 Oct 2017)... which confuses things later.
+# Fixing it here:
 
+# With hackery:
+# historicTradeData_GBP <- historicTradeData_GBP[ unixtime > "2017-10-30" , ]
+# historicTradeData_EUR <- historicTradeData_EUR[ unixtime > "2017-10-30" , ]
 
+# By trying to go back to the original unixtime, then convert back to POSIXct, although this time using GMT as tz, instead of the local tz which is used by default... So this removes daylight saving adjustments:
+historicTradeData_GBP[ , unixtime := as.POSIXct( as.numeric( unixtime ),  origin = "1970-01-01", tz = "GMT") ]
+historicTradeData_EUR[ , unixtime := as.POSIXct( as.numeric( unixtime ),  origin = "1970-01-01", tz = "GMT") ]
 
+# However, this still does not get around the issue of there being one missing hour in the data, before 30 Oct (Why?!?!?!)
 
-# Time series -------------------------------------------------------------
+# Time series ------------------------------------------------------------
 
 # xts version -------------------------------------------------------------
 
@@ -261,7 +266,9 @@ simplified_data_wide <- dcast( simplified_data,
 # Impute values from previous cell, whenever there is missing data. Since fill() fills empty cells vertically, going to temporarily transpose this data:
 simplified_data_wide_t <- data.table( t( simplified_data_wide[ , - 1] ) )
 simplified_data_wide_t <- data.table( apply( simplified_data_wide_t, 2, as.numeric ) )
-simplified_data_wide_t <- fill( simplified_data_wide_t, c( V19, V25 ), .direction = "down" )
+
+# Fill any missing values / cells with the most recent price recorded:
+simplified_data_wide_t <- fill( simplified_data_wide_t, names( simplified_data_wide_t ), .direction = "down" )
 
 readd_dates <- simplified_data_wide$Date
 column_names <- names( simplified_data_wide )
@@ -278,7 +285,7 @@ simplified_data_long <- melt( simplified_data_wide,
 simplified_data_long <- simplified_data_long[ order( Date, Hour ), ]
  
 bitcoin_ts <- ts( simplified_data_long$WeightedAvePricesPerTimeUnit, 
-                  frequency = 23 )
+                  frequency = 24 )
 
 cycle( bitcoin_ts )
 summary( bitcoin_ts )
@@ -299,7 +306,7 @@ boxplot( bitcoin_ts ~ cycle( bitcoin_ts ) ) # Shows how things vary across the t
 # Use Augmented Dickey-Fuller Test (adf test). A p-Value of less than 0.05 in adf.test() indicates that it is stationary.
 
 
-adf.test( na.omit( bitcoin_ts ) ) # p-value < 0.05 indicates the TS is stationary
+adf.test( bitcoin_ts ) # p-value < 0.05 indicates the TS is stationary
 kpss.test( bitcoin_ts )
 
 # OR:
