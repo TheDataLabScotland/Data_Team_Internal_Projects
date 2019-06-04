@@ -285,13 +285,12 @@ simplified_data_long <- melt( simplified_data_wide,
 simplified_data_long <- simplified_data_long[ order( Date, Hour ), ]
  
 bitcoin_ts <- ts( simplified_data_long$WeightedAvePricesPerTimeUnit, 
-                  frequency = 24 )
+                  frequency = 23 )
 
 cycle( bitcoin_ts )
 summary( bitcoin_ts )
 
 plot( bitcoin_ts )
-abline( reg = lm( bitcoin_ts ~ time( bitcoin_ts ) ) )
 plot( aggregate( bitcoin_ts, FUN = mean ) ) # Average price for each day of measurement.
 boxplot( bitcoin_ts ~ cycle( bitcoin_ts ) ) # Shows how things vary across the time of day (by considering data from all days within each boxplot)
 
