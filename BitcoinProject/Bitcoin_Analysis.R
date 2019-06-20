@@ -218,7 +218,7 @@ historicTradeData_EUR[ , unixtime2 := as.POSIXct( unixtime, origin = "1970-01-01
 historicTradeData_GBP[ , unixtime := as.POSIXct( as.numeric( unixtime ),  origin = "1970-01-01", tz = "GMT") ]
 historicTradeData_EUR[ , unixtime := as.POSIXct( as.numeric( unixtime ),  origin = "1970-01-01", tz = "GMT") ]
 
-# However, this still does not get around the issue of there being one missing hour in the data, before 30 Oct (Why?!?!?!)
+# However, this still does not get around the issue of there being one missing hour in the data, before 30 Oct (Why?)
 
 # Time series ------------------------------------------------------------
 
@@ -351,64 +351,5 @@ plot( bitcoin_ts )
 # Similar idea:
 bitcoin_ts_seasonally_and_randomness_adjusted <- bitcoin_ts - decomposed_bitcoin_ts$seasonal - decomposed_bitcoin_ts$random
 plot( bitcoin_ts_seasonally_and_randomness_adjusted ) # Very similar to the SMA ts.
-
-
-
-
-# Network analysis --------------------------------------------------------
-
-# Ultimately irrelevant. But found example and decided to try it out.
-
-# Source: http://beautifuldata.net/2015/01/querying-the-bitcoin-blockchain-with-r/
-# Or: https://www.r-bloggers.com/querying-the-bitcoin-blockchain-with-r/
-
-wallet <- blockchain.api.process('15Mb2QcgF3XDMeVn6M7oCG6CQLw4mkedDi')
-seed <- '1NfRMkhm5vjizzqkp2Qb28N7geRQCa4XqC'
-genesis <- '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa'
-singleaddress <- blockchain.api.query( method = 'Single Address', bitcoin_address = seed, limit = 100 )
-txs <- singleaddress$txs
-
-bc <- data.frame()
-for ( t in txs ) {
-  hash <- t$hash
-  for (inputs in t$inputs) {
-    from <- inputs$prev_out$addr
-    for (out in t$out) {
-      to <- out$addr
-      va <- out$value
-      bc <- rbind( bc, 
-                   data.frame( from = from,
-                               to = to, 
-                               value = va, 
-                               stringsAsFactors = F ) )
-    }
-  }
-}
-
-
-btc <- ddply( bc, c( "from", "to" ), summarize, value = sum( value ) )
-
-
-btc.net <- graph.data.frame( btc, directed = T )
-
-V( btc.net )$color <- "blue"
-
-V( btc.net )$color[ unlist( V( btc.net )$name ) == seed ] <- "red"
-
-nodes <- unlist( V( btc.net )$name )
-
-E( btc.net )$width <- log( E( btc.net )$value ) / 10
-
-plot.igraph( btc.net, vertex.size = 5, edge.arrow.size = 0.1, 
-             vertex.label = NA, 
-             main = paste( "BTC transaction network for\n", seed ) )
-
-
-
-
-
-
-
-
 
 
