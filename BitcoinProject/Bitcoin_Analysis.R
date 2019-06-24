@@ -290,7 +290,11 @@ bitcoin_ts <- ts( simplified_data_long$WeightedAvePricesPerTimeUnit,
 cycle( bitcoin_ts )
 summary( bitcoin_ts )
 
-plot( bitcoin_ts )
+plot( bitcoin_ts, main = paste( "Bitcoin prices:", 
+                                min( simplified_data_long$Date ),
+                                "-",
+                                max( simplified_data_long$Date ),
+                                sep = " " ) )
 plot( aggregate( bitcoin_ts, FUN = mean ) ) # Average price for each day of measurement.
 boxplot( bitcoin_ts ~ cycle( bitcoin_ts ) ) # Shows how things vary across the time of day (by considering data from all days within each boxplot)
 
